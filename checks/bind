@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+
+def inventory(info):
+    if len(info):
+        return [(None, {})]
+
+def get_stats(info):
+    label = None
+    stats = {}
+    for e in info:
+        try:
+            value = int(e[-1])
+        except ValueError:
+            label = " ".join(e)
+        else:
+            key = " ".join(e[:-1])
+            stats.setdefault(label, {})[key] = value
+    return stats
+
+def check(item, params, info):
+    stats = get_stats(info)
+    now = time.time()
+    perfdata = []
+    queries = stats.get("Incoming Queries", {}).items()
+    for r_type, count in stats.get("Name Server Statistics", {}).items():
+        try:
+            r_type = {
+                "queries resulted in successful answer": "SUCCESS",
+                "requested transfers completed": "TRANSFERT",
+                "recursive queries rejected": "REFUSED",
+                "queries resulted in nxrrset": "NXRRSET",
+                "queries resulted in NXDOMAIN": "NXDOMAIN",
+            }[r_type]
+        except KeyError:
+            continue
+        else:
+            queries.append((r_type, count))
+    for r_type, count in queries:
+        timedif, rate = get_counter(
+            "bind.{0}".format(r_type.lower()),
+            now, count)
+        r_per_minute = int(rate * 60)
+        perfdata.append((r_type, int(rate * 60), 10, 100))
+    return (0, "OK", perfdata)
+
+check_info["bind"] = {
+    "check_function": check,
+    "inventory_function": inventory,
+    "service_description": "Bind Statistics",
+    "has_perfdata": True,
+}
